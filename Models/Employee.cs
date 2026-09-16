@@ -1,11 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using Xunit;
 
 namespace CRUD_Practice.Models
 {
-    [Index(nameof(Email), IsUnique = true)]
     public class Employee
     {
         [Key]

@@ -1,167 +1,253 @@
-
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using CRUD_Practice.Data;
 using CRUD_Practice.Models;
+using Microsoft.AspNetCore.Mvc;
+using System.Net;
 
-public class DepartmentsController : Controller
+namespace CRUD_Practice.Controllers
 {
-    private readonly ApplicationDbContext _context;
-
-    public DepartmentsController(ApplicationDbContext context)
+    public class DepartmentsController : Controller
     {
-        _context = context;
-    }
+        private readonly IHttpClientFactory _httpClientFactory;
 
-    // GET: DEPARTMENTS
-    public async Task<IActionResult> Index()    
-    {
-        return View(await _context.Departments.ToListAsync());
-    }
-
-    // GET: DEPARTMENTS/Details/5
-    public async Task<IActionResult> Details(int? id)
-    {
-        if (id == null)
+        public DepartmentsController(IHttpClientFactory httpClientFactory)
         {
-            return NotFound();
+            _httpClientFactory = httpClientFactory;
         }
 
-        var department = await _context.Departments
-            .FirstOrDefaultAsync(m => m.Id == id);
-        if (department == null)
+
+        // GET: Departments
+        public async Task<IActionResult> Index()
         {
-            return NotFound();
-        }
+            var client = _httpClientFactory.CreateClient("ApiClient");
 
-        return View(department);
-    }
+            var response = await client.GetAsync("api/Departments");
 
-    // GET: DEPARTMENTS/Create
-    public IActionResult Create()
-    {
-        return View();
-    }
-
-    // POST: DEPARTMENTS/Create
-    // To protect from overposting attacks, enable the specific properties you want to bind to.
-    // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Department department)
-    {
-        if (ModelState.IsValid)
-        {
-            if(await _context.Departments.AnyAsync(d => d.DepartmentName == department.DepartmentName))
+            if (!response.IsSuccessStatusCode)
             {
-                ModelState.AddModelError("DepartmentName","Department name already exists.");
+                return View(new List<Department>());
+            }
+
+            var departments = await response.Content.ReadFromJsonAsync<List<Department>>();
+
+            return View(departments ?? new List<Department>());
+        }
+
+
+        // GET: Departments/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var client = _httpClientFactory.CreateClient("ApiClient");
+
+            var response = await client.GetAsync($"api/Departments/{id}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return NotFound();
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return BadRequest();
+            }
+
+            var department = await response.Content.ReadFromJsonAsync<Department>();
+
+            if (department == null)
+            {
+                return NotFound();
+            }
+
+            return View(department);
+        }
+
+
+        // GET: Departments/Create
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+
+        // POST: Departments/Create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(Department department)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(department);
+            }
+
+            var client = _httpClientFactory.CreateClient("ApiClient");
+
+            var response = await client.PostAsJsonAsync("api/Departments", department);
+
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                ModelState.AddModelError("DepartmentName", "Department name already exists.");
 
                 return View(department);
             }
 
-            _context.Add(department);
-            await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Created Successfully";
+            if (!response.IsSuccessStatusCode)
+            {
+                ModelState.AddModelError("", "Unable to create department.");
+
+                return View(department);
+            }
+
+            TempData["SuccessMessage"] = "Department created successfully.";
+
             return RedirectToAction(nameof(Index));
         }
-        return View(department);
-    }
 
-    // GET: DEPARTMENTS/Edit/5
-    public async Task<IActionResult> Edit(int? id)
-    {
-        if (id == null)
-        {
-            return NotFound();
-        }
 
-        var department = await _context.Departments.FindAsync(id);
-        if (department == null)
+        // GET: Departments/Edit/5
+        public async Task<IActionResult> Edit(int? id)
         {
-            return NotFound();
-        }
-        return View(department);
-    }
-
-    // POST: DEPARTMENTS/Edit/5
-    // To protect from overposting attacks, enable the specific properties you want to bind to.
-    // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int? id, Department department)
-    {
-        if (id != department.Id)
-        {
-            return NotFound();
-        }
-
-        if (ModelState.IsValid)
-        {
-            try
+            if (id == null)
             {
-                if(await _context.Departments.AnyAsync(d=>d.DepartmentName == department.DepartmentName))
-                {
-                    ModelState.AddModelError("DepartmentName", "Department already exist");
-
-                    return View(department);
-                }
-
-                _context.Update(department);
-                await _context.SaveChangesAsync();
+                return NotFound();
             }
-            catch (DbUpdateConcurrencyException)
+
+            var client = _httpClientFactory.CreateClient("ApiClient");
+
+            var response = await client.GetAsync($"api/Departments/{id}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                if (!DepartmentExists(department.Id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return NotFound();
             }
-            TempData["SuccessMessage"] = "Edited Successfully";
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return BadRequest();
+            }
+
+            var department = await response.Content.ReadFromJsonAsync<Department>();
+
+            if (department == null)
+            {
+                return NotFound();
+            }
+
+            return View(department);
+        }
+
+
+        // POST: Departments/Edit/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, Department department)
+        {
+            if (id != department.Id)
+            {
+                return BadRequest();
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return View(department);
+            }
+
+            // Convert MVC model to API DTO
+            var dto = new DepartmentUpdateDto
+            {
+                DepartmentName = department.DepartmentName
+            };
+
+            var client = _httpClientFactory.CreateClient("ApiClient");
+
+            var response = await client.PutAsJsonAsync($"api/Departments/{id}", dto);
+
+            // Duplicate department name
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                ModelState.AddModelError("DepartmentName", "Department name already exists.");
+
+                return View(department);
+            }
+
+            // Department not found
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return NotFound();
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                ModelState.AddModelError("", "Unable to update department.");
+
+                return View(department);
+            }
+
+            TempData["SuccessMessage"] ="Department updated successfully.";
+
             return RedirectToAction(nameof(Index));
         }
-        return View(department);
-    }
 
-    // GET: DEPARTMENTS/Delete/5
-    public async Task<IActionResult> Delete(int? id)
-    {
-        if (id == null)
+
+        // GET: Departments/Delete/5
+        public async Task<IActionResult> Delete(int? id)
         {
-            return NotFound();
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var client = _httpClientFactory.CreateClient("ApiClient");
+
+            var response = await client.GetAsync($"api/Departments/{id}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return NotFound();
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return BadRequest();
+            }
+
+            var department = await response.Content.ReadFromJsonAsync<Department>();
+
+            if (department == null)
+            {
+                return NotFound();
+            }
+
+            return View(department);
         }
 
-        var department = await _context.Departments
-            .FirstOrDefaultAsync(m => m.Id == id);
-        if (department == null)
+
+        // POST: Departments/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            return NotFound();
+            var client = _httpClientFactory.CreateClient("ApiClient");
+
+            var response = await client.DeleteAsync($"api/Departments/{id}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return NotFound();
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                TempData["ErrorMessage"] = "Unable to delete department.";
+
+                return RedirectToAction(nameof(Index));
+            }
+
+            TempData["SuccessMessage"] = "Department deleted successfully.";
+
+            return RedirectToAction(nameof(Index));
         }
-
-        return View(department);
-    }
-
-    // POST: DEPARTMENTS/Delete/5
-    [HttpPost, ActionName("Delete")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteConfirmed(int? id)
-    {
-        var department = await _context.Departments.FindAsync(id);
-        if (department != null)
-        {
-            _context.Departments.Remove(department);
-        }
-
-        await _context.SaveChangesAsync();
-        TempData["SuccessMessage"] = "Deleted Successfully";
-        return RedirectToAction(nameof(Index));
-    }
-
-    private bool DepartmentExists(int? id)
-    {
-        return _context.Departments.Any(e => e.Id == id);
     }
 }
